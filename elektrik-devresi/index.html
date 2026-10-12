@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Elektrik Devresi</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #1c2a44; overflow: hidden; touch-action: none; }
+  body { font-family: "Trebuchet MS", system-ui, -apple-system, sans-serif; user-select: none; -webkit-user-select: none; }
+  /* Sahne Unity'deki düzenle aynı: 1366x768, 1 birim = 76.8 piksel */
+  #stage { position: absolute; left: 50%; top: 50%; width: 1366px; height: 768px; transform-origin: 0 0; overflow: hidden; background: #314d79 url(img/mutfak.png) center / cover no-repeat; }
+  #stage > * { position: absolute; }
+  .c { transform: translate(-50%, -50%); }
+  #cocuk { left: 295px; top: 552px; width: 645px; pointer-events: none; }
+  #balon { left: 330px; top: 178px; width: 540px; padding: 22px 26px; box-sizing: border-box; background: #fff; border-radius: 28px; font-size: 31px; line-height: 1.25; color: #2b2b2b; text-align: center; box-shadow: 0 6px 0 rgba(0, 0, 0, .12); }
+  #balon::after { content: ""; position: absolute; left: 150px; bottom: -34px; border: 18px solid transparent; border-top-color: #fff; border-left-color: #fff; }
+  #devre { left: 956px; top: 420px; width: 653px; height: 593px; pointer-events: none; border-radius: 10px; }
+  #yama { left: 652px; top: 572px; width: 92px; height: 86px; background: #fff; pointer-events: none; }
+  #kol { left: 745px; top: 562px; width: 11px; height: 95px; background: #111; border-radius: 5px; transform-origin: 50% 100%; transform: rotate(-42deg); transition: transform .9s ease-in-out; pointer-events: none; }
+  #kol.kapali { transform: rotate(0deg); }
+  .yuva { width: 134px; height: 100px; border-radius: 10px; border: 4px dashed rgba(40, 120, 255, 0); box-sizing: border-box; pointer-events: none; transition: border-color .25s, background .25s; }
+  .secim .yuva { border-color: rgba(40, 120, 255, .85); background: rgba(90, 160, 255, .14); animation: nabiz 1.4s ease-in-out infinite; }
+  @keyframes nabiz { 50% { border-color: rgba(40, 120, 255, .35); } }
+  .parca { cursor: grab; touch-action: none; z-index: 3; transition: left .28s ease, top .28s ease; }
+  .parca.tut { cursor: grabbing; transition: none; z-index: 6; filter: drop-shadow(0 8px 6px rgba(0, 0, 0, .35)); }
+  .parca::after { content: ""; position: absolute; inset: -20px -26px; }
+  .parca img { display: block; width: 100%; height: 100%; pointer-events: none; -webkit-user-drag: none; }
+  .etiket { font-size: 30px; font-weight: 700; color: #333; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; }
+  .secim .etiket { opacity: 1; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; background: #fff; color: #333; box-shadow: 0 4px 0 rgba(0, 0, 0, .25); }
+  button:active { transform: translate(-50%, calc(-50% + 3px)); box-shadow: 0 1px 0 rgba(0, 0, 0, .25); }
+  button:disabled { opacity: .5; cursor: default; }
+  #sec { left: 1003px; top: 64px; width: 387px; height: 88px; font-size: 52px; font-weight: 700; background: #ffd34d; }
+  #kontrol { left: 999px; top: 526px; width: 132px; height: 44px; font-size: 28px; background: #7be38a; }
+  #geri { left: 1161px; top: 526px; width: 146px; height: 44px; font-size: 27px; }
+  #kontrol, #geri { visibility: hidden; }
+  .secim #kontrol, .secim #geri { visibility: visible; }
+  #isik { left: 1171px; top: 290px; width: 380px; height: 300px; pointer-events: none; opacity: 0; transition: opacity .6s; mix-blend-mode: screen; z-index: 5;
+    background: radial-gradient(closest-side, rgba(255, 250, 215, .95), rgba(255, 236, 150, .55) 30%, rgba(255, 226, 130, .12) 62%, transparent 100%), url(img/isik.jpg) center / 100% 100%; -webkit-mask: radial-gradient(closest-side, #000 35%, transparent 100%); mask: radial-gradient(closest-side, #000 35%, transparent 100%); }
+  #kart { left: 330px; top: 196px; width: 560px; padding: 26px 20px 30px; box-sizing: border-box; background: #fff; border-radius: 26px; text-align: center; box-shadow: 0 14px 40px rgba(0, 0, 0, .35); z-index: 8; display: none; }
+  #kart.acik { display: block; }
+  #kart h1 { margin: 0; font-size: 74px; line-height: 1.05; color: #d9442b; }
+  #kart.kazandi h1 { color: #1f9d55; }
+  #kart p { margin: 12px 0 20px; font-size: 25px; color: #444; }
+  #kart button { position: static; width: 287px; height: 73px; font-size: 44px; font-weight: 700; background: #ffd34d; }
+  #kart button:active { transform: translateY(3px); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <img id="cocuk" class="c" src="img/pabloo.png" alt="">
+  <div id="balon" class="c">Aydınlık bir masa lambasına ihtiyacım var. En aydınlık olması gereken malzemeleri malzeme kutusundan seçelim.</div>
+  <img id="devre" class="c" src="img/devre.png" alt="">
+  <div id="yama"></div>
+  <div id="kol"></div>
+  <div class="yuva c" data-yuva="0" style="left:748px;top:323px"></div>
+  <div class="yuva c" data-yuva="1" style="left:756px;top:482px"></div>
+
+  <div class="parca c" data-ad="1000Ω direnç" data-tur="direnc" data-deger="1000" data-x="996" data-y="400" style="width:44px;height:116px"><img src="img/direnc-1000.png" alt="1000 ohm direnç"></div>
+  <div class="parca c" data-ad="330Ω direnç" data-tur="direnc" data-deger="330" data-x="1001" data-y="606" style="width:45px;height:112px"><img src="img/direnc-330.png" alt="330 ohm direnç"></div>
+  <div class="parca c" data-ad="3V pil" data-tur="pil" data-deger="3" data-x="1142" data-y="408" style="width:38px;height:80px"><img src="img/pil-3v.png" alt="3 volt pil"></div>
+  <div class="parca c" data-ad="1.5V pil" data-tur="pil" data-deger="1.5" data-x="1142" data-y="607" style="width:38px;height:78px"><img src="img/pil-1.5v.png" alt="1.5 volt pil"></div>
+
+  <div class="etiket c" style="left:1003px;top:477px">1000ohm</div>
+  <div class="etiket c" style="left:1142px;top:477px">3V</div>
+  <div class="etiket c" style="left:1003px;top:688px">330ohm</div>
+  <div class="etiket c" style="left:1142px;top:688px">1.5V</div>
+
+  <div id="isik" class="c"></div>
+
+  <button id="sec" class="c">Malzeme Seç</button>
+  <button id="kontrol" class="c">Kontrol</button>
+  <button id="geri" class="c">Geri al</button>
+
+  <div id="kart" class="c"><h1></h1><p></p><button></button></div>
+</div>
+<script>
+(() => {
+  const stage = document.getElementById('stage'), $ = id => document.getElementById(id);
+  let scale = 1;
+  function fit() {
+    scale = Math.min(innerWidth / 1366, innerHeight / 768);
+    stage.style.transform = 'scale(' + scale + ') translate(-50%, -50%)';
+  }
+  addEventListener('resize', fit); fit();
+
+  const yuvalar = [...document.querySelectorAll('.yuva')].map(e => ({ x: parseFloat(e.style.left), y: parseFloat(e.style.top), parca: null }));
+  const parcalar = [...document.querySelectorAll('.parca')];
+  let secim = false, kilit = false;
+
+  const koy = (p, x, y) => { p.style.left = x + 'px'; p.style.top = y + 'px'; };
+  function eve(p) {
+    for (const y of yuvalar) if (y.parca === p) y.parca = null;
+    koy(p, +p.dataset.x, +p.dataset.y);
+  }
+  parcalar.forEach(p => eve(p));
+
+  parcalar.forEach(p => {
+    let tut = null;
+    p.addEventListener('pointerdown', e => {
+      if (kilit) return;
+      e.preventDefault(); p.setPointerCapture(e.pointerId);
+      const b = stage.getBoundingClientRect();
+      tut = { dx: (e.clientX - b.left) / scale - parseFloat(p.style.left), dy: (e.clientY - b.top) / scale - parseFloat(p.style.top) };
+      p.classList.add('tut');
+    });
+    p.addEventListener('pointermove', e => {
+      if (!tut) return;
+      const b = stage.getBoundingClientRect();
+      koy(p, (e.clientX - b.left) / scale - tut.dx, (e.clientY - b.top) / scale - tut.dy);
+    });
+    const birak = () => {
+      if (!tut) return;
+      tut = null; p.classList.remove('tut');
+      const x = parseFloat(p.style.left), y = parseFloat(p.style.top);
+      // parça ancak malzeme seçimi açıkken ve bir yuvanın üstüne bırakılırsa oturur, yoksa yerine döner
+      const hedef = secim && yuvalar.find(v => Math.abs(x - v.x) < 67 + 14 && Math.abs(y - v.y) < 50 + 30);
+      if (!hedef) { eve(p); return; }
+      if (hedef.parca && hedef.parca !== p) eve(hedef.parca);
+      for (const v of yuvalar) if (v.parca === p) v.parca = null;
+      hedef.parca = p; koy(p, hedef.x, hedef.y);
+    };
+    p.addEventListener('pointerup', birak); p.addEventListener('pointercancel', birak);
+  });
+
+  // Lamba parlaklığı özgün oyundaki ışık katmanlarıyla aynı
+  function sonuc() {
+    const takili = yuvalar.map(v => v.parca).filter(Boolean);
+    const piller = takili.filter(p => p.dataset.tur === 'pil'), direncler = takili.filter(p => p.dataset.tur === 'direnc');
+    if (piller.length === 2) return { isik: 1, kazandi: true, yazi: 'İki pil birlikte 4.5V veriyor ve devrede direnç yok. Lamba en parlak hâliyle yanıyor.' };
+    if (piller.length === 1 && direncler.length === 1) {
+      const v = +piller[0].dataset.deger, r = +direncler[0].dataset.deger;
+      const isik = v === 3 ? (r === 330 ? .706 : .475) : (r === 330 ? .243 : .106);
+      return { isik, kazandi: false, yazi: piller[0].dataset.ad + ' ve ' + direncler[0].dataset.ad + ' ile lamba yanıyor ama yeterince parlak değil. Direnç akımı azaltıyor.' };
+    }
+    if (piller.length === 1) return { isik: 0, kazandi: false, yazi: 'Devrede boş bir yer kaldı. Devre tamamlanmadan lamba yanmaz.' };
+    if (direncler.length) return { isik: 0, kazandi: false, yazi: 'Devrede pil yok. Enerji kaynağı olmadan lamba yanmaz.' };
+    return { isik: 0, kazandi: false, yazi: 'Devre boş. Önce malzemeleri gri alanlara sürükle.' };
+  }
+
+  $('sec').onclick = () => { secim = true; stage.classList.add('secim'); };
+  $('geri').onclick = () => { if (!kilit) parcalar.forEach(eve); };
+  $('kontrol').onclick = () => {
+    if (kilit) return;
+    kilit = true; $('kontrol').disabled = $('geri').disabled = true;
+    $('kol').classList.add('kapali');
+    setTimeout(() => {
+      const s = sonuc();
+      $('isik').style.opacity = s.isik;
+      const k = $('kart');
+      k.classList.toggle('kazandi', s.kazandi); k.classList.add('acik');
+      k.querySelector('h1').textContent = s.kazandi ? 'Tebrikler!' : 'Tekrar Dene!';
+      k.querySelector('p').textContent = s.yazi;
+      k.querySelector('button').textContent = s.kazandi ? 'Tamam' : 'Tekrar Dene!';
+      window.__sonuc = s;
+    }, 1000);
+  };
+  $('kart').querySelector('button').onclick = () => {
+    parcalar.forEach(eve);
+    $('kol').classList.remove('kapali'); $('isik').style.opacity = 0; $('kart').classList.remove('acik');
+    kilit = false; $('kontrol').disabled = $('geri').disabled = false;
+  };
+})();
+</script>
+</body>
+</html>

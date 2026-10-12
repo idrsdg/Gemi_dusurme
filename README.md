@@ -1,17 +1,23 @@
-# Sürükle Bırak: Elektrik Devresi
+# Gemi Düşürme ve Elektrik Devresi
 
-Unity 2D ile yapılmış küçük bir eğitim oyunu (2019). Pilleri ve dirençleri sürükleyip devredeki boşluklara bırakırsın, sonra anahtarı kapatıp lambanın yanıp yanmadığına bakarsın. İki pil birlikte takılınca lamba tam yanar.
+2019'da Unity ile yaptığım iki küçük oyun. İkisi de artık tarayıcıda çalışıyor, kurulum gerekmez.
 
-## Çalıştırma
+## Gemi Düşürme
 
-- Unity sürümü: 2018.2.20f1
-- Unity Hub'da bu klasörü proje olarak aç.
-- `Assets/Scenes/SampleScene.unity` sahnesini açıp Play'e bas.
+Kıyıdaki topla, kıyıya yaklaşan gemileri batırırsın.
 
-## İçerik
+- Çalıştırma: `index.html` dosyasını tarayıcıda aç.
+- Fareyle ya da parmağınla nişan al, tıklayınca top ateşlenir. Uzağa nişan alırsan top daha güçlü çıkar.
+- Üç gemi kıyıya varırsa oyun biter. Büyük savaş gemisi iki isabet ister.
 
-- `Assets/scripts/PilVeDirenc.cs`: parçaları sürükleme ve yuvaya oturtma
-- `Assets/scripts/CODE.cs`: anahtar animasyonu, devre kontrolü, yeniden başlatma
-- `Assets/Scenes/SampleScene.unity`: oyunun tek sahnesi
+Özgün Unity projesinin kaynağı kayboldu. Bu sürüm oyunun kurallarına göre HTML ve JavaScript ile yeniden yazıldı.
 
-Not: Depo adı `Gemi_dusurme` olsa da içindeki proje bu elektrik devresi oyunudur. Proje eskiden tek bir `.rar` dosyası olarak yüklenmişti; kaynak dosyalar artık doğrudan depoda duruyor.
+## Elektrik Devresi
+
+Pilleri ve dirençleri sürükleyip devredeki boşluklara bırakırsın, sonra anahtarı kapatıp lambanın ne kadar parlak yandığına bakarsın.
+
+- Çalıştırma: `elektrik-devresi/index.html` dosyasını tarayıcıda aç.
+- Önce "Malzeme Seç", sonra parçaları gri alanlara sürükle ve "Kontrol"e bas.
+- İki pil birlikte takılınca lamba en parlak hâliyle yanar.
+
+Web sürümü özgün görselleri ve sahne düzenini kullanır. Özgün Unity projesi `elektrik-devresi/unity/` klasöründedir (Unity 2018.2.20f1, sahne `Assets/Scenes/SampleScene.unity`).

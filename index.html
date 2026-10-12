@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Gemi Düşürme</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #0b1b2b; overflow: hidden; touch-action: none; }
+  body { display: flex; align-items: center; justify-content: center; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { display: block; cursor: crosshair; box-shadow: 0 10px 50px rgba(0, 0, 0, .5); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(() => {
+  const W = 960, H = 540, SEA = 372, CX = 104, CY = 300, GRAV = 620;
+  const cv = document.getElementById('c'), g = cv.getContext('2d');
+  let scale = 1;
+  function fit() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    scale = Math.min(innerWidth / W, innerHeight / H);
+    cv.style.width = W * scale + 'px'; cv.style.height = H * scale + 'px';
+    cv.width = Math.round(W * scale * dpr); cv.height = Math.round(H * scale * dpr);
+    g.setTransform(cv.width / W, 0, 0, cv.height / H, 0, 0);
+  }
+  addEventListener('resize', fit); fit();
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+
+  // ---- ses ----
+  let ac = null, muted = false;
+  function audio() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (ac && ac.state === 'suspended') ac.resume(); }
+  function noise(vol, dur, freq) {
+    if (!ac || muted) return;
+    const n = Math.floor(ac.sampleRate * dur), b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2);
+    const s = ac.createBufferSource(), v = ac.createGain(), f = ac.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = freq; v.gain.value = vol;
+    s.buffer = b; s.connect(f).connect(v).connect(ac.destination); s.start();
+  }
+
+  // gemi türleri: w = gövde uzunluğu, hp = kaç isabet, pts = puan
+  const TYPES = [
+    { name: 'sandal', w: 62, h: 16, hp: 1, pts: 30, sp: [78, 104], hull: '#8a5a33', sail: '#f4ead2' },
+    { name: 'kalyon', w: 104, h: 24, hp: 1, pts: 20, sp: [48, 68], hull: '#6b3f22', sail: '#fff6e0' },
+    { name: 'savas', w: 150, h: 32, hp: 2, pts: 50, sp: [30, 44], hull: '#3d2a24', sail: '#e7dcc6' }
+  ];
+
+  let best = 0;
+  try { best = +localStorage.getItem('gemiDusurmeBest') || 0; } catch (e) {}
+  const clouds = [0, 1, 2, 3].map(i => ({ x: rnd(0, W), y: 40 + i * 34, s: rnd(.7, 1.3), v: rnd(4, 10) }));
+  const S = { mode: 'menu', aim: { x: 520, y: 180 }, t: 0 };
+  window.__g = S;
+
+  function reset() {
+    Object.assign(S, { mode: 'play', t: 0, score: 0, lives: 3, sunk: 0, ships: [], balls: [], fx: [], splashes: [], spawnT: .6, reload: 0, recoil: 0, shake: 0, overT: 0 });
+  }
+
+  function spawn() {
+    const lvl = S.t / 22;
+    const r = Math.random(), T = TYPES[r < .38 ? 0 : r < .8 ? 1 : 2];
+    S.ships.push({ T, x: W + T.w, v: rnd(T.sp[0], T.sp[1]) * (1 + Math.min(1.1, lvl * .16)), hp: T.hp, bob: rnd(0, 6.28), sink: 0, hit: 0 });
+  }
+
+  // nişan: fare/parmak yönü açıyı, uzaklığı da gücü belirler
+  function launch() {
+    const dx = S.aim.x - CX, dy = S.aim.y - CY;
+    const ang = clamp(Math.atan2(dy, dx), -1.45, .12), pow = clamp(Math.hypot(dx, dy) * 1.55, 330, 940);
+    return { ang, vx: Math.cos(ang) * pow, vy: Math.sin(ang) * pow, mx: CX + Math.cos(ang) * 58, my: CY + Math.sin(ang) * 58 };
+  }
+
+  function fire() {
+    if (S.mode !== 'play' || S.reload > 0) return;
+    const L = launch();
+    S.balls.push({ x: L.mx, y: L.my, vx: L.vx, vy: L.vy });
+    S.reload = .55; S.recoil = 1; noise(.5, .35, 500);
+    for (let i = 0; i < 10; i++) S.fx.push({ x: L.mx, y: L.my, vx: Math.cos(L.ang) * rnd(40, 160) + rnd(-30, 30), vy: Math.sin(L.ang) * rnd(40, 160) + rnd(-30, 30), t: 0, life: rnd(.3, .7), s: rnd(5, 11), col: '200,200,200', g: -40 });
+  }
+
+  function explode(x, y, n) {
+    for (let i = 0; i < n; i++) { const a = rnd(0, 6.28), v = rnd(40, 260); S.fx.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, t: 0, life: rnd(.4, 1), s: rnd(3, 9), col: ['255,214,102', '255,140,50', '90,70,60'][i % 3], g: 260 }); }
+    S.shake = .3; noise(.6, .6, 800);
+  }
+  function splash(x) { for (let i = 0; i < 12; i++) S.fx.push({ x, y: SEA, vx: rnd(-70, 70), vy: rnd(-260, -90), t: 0, life: rnd(.4, .8), s: rnd(2, 5), col: '225,245,255', g: 620 }); S.splashes.push({ x, t: 0 }); noise(.18, .3, 1800); }
+
+  // ---- girdi ----
+  const pos = e => { const b = cv.getBoundingClientRect(); return { x: (e.clientX - b.left) / scale, y: (e.clientY - b.top) / scale }; };
+  cv.addEventListener('pointermove', e => { S.aim = pos(e); });
+  cv.addEventListener('pointerdown', e => {
+    e.preventDefault(); audio(); S.aim = pos(e);
+    if (S.mode === 'menu' || (S.mode === 'over' && S.overT > .8)) { reset(); return; }
+    fire();
+  });
+  addEventListener('keydown', e => {
+    audio();
+    if (e.key === ' ') e.preventDefault();
+    if (e.key.toLowerCase() === 'm') { muted = !muted; return; }
+    if (S.mode === 'menu' || (S.mode === 'over' && S.overT > .8)) { reset(); return; }
+    if (e.key === ' ' || e.key === 'Enter') fire();
+  });
+
+  function update(dt) {
+    S.t += dt;
+    for (const c of clouds) { c.x -= c.v * dt; if (c.x < -140) c.x = W + 140; }
+    if (S.mode === 'menu') return;
+    for (const f of S.fx) { f.t += dt; f.vy += f.g * dt; f.x += f.vx * dt; f.y += f.vy * dt; }
+    S.fx = S.fx.filter(f => f.t < f.life);
+    for (const s of S.splashes) s.t += dt;
+    S.splashes = S.splashes.filter(s => s.t < .6);
+    S.shake = Math.max(0, S.shake - dt); S.recoil = Math.max(0, S.recoil - dt * 4);
+    for (const s of S.ships) { if (s.sink) s.sink += dt; s.hit = Math.max(0, s.hit - dt); s.bob += dt * 2; }
+    S.ships = S.ships.filter(s => s.sink < 2.2 && !s.gone);
+    if (S.mode === 'over') { S.overT += dt; return; }
+
+    S.reload = Math.max(0, S.reload - dt);
+    S.spawnT -= dt;
+    if (S.spawnT <= 0) { spawn(); S.spawnT = rnd(1.5, 2.9) / (1 + Math.min(1.4, S.t / 55)); }
+
+    for (const s of S.ships) {
+      if (s.sink) continue;
+      s.x -= s.v * dt;
+      if (s.x - s.T.w / 2 < 176) {   // kıyıya vardı
+        s.gone = true; S.lives--; S.shake = .4; explode(190, SEA - 14, 22);
+        if (S.lives <= 0) { S.mode = 'over'; S.overT = 0; if (S.score > best) { best = S.score; try { localStorage.setItem('gemiDusurmeBest', best); } catch (e) {} } }
+      }
+    }
+    for (const b of S.balls) {
+      b.vy += GRAV * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+      for (const s of S.ships) {
+        if (s.sink || b.dead) continue;
+        const top = SEA - s.T.h - s.T.w * .42;
+        if (Math.abs(b.x - s.x) < s.T.w / 2 + 5 && b.y > top && b.y < SEA + 6 && (b.y > SEA - s.T.h - 6 || Math.abs(b.x - s.x) < s.T.w * .3)) {
+          b.dead = true; s.hp--; s.hit = .15; explode(b.x, Math.min(b.y, SEA - 6), 16);
+          if (s.hp <= 0) { s.sink = .001; S.score += s.T.pts; S.sunk++; }
+        }
+      }
+      if (!b.dead && b.y >= SEA && b.x > 170) { b.dead = true; splash(b.x); }
+      if (b.y > H + 20 || b.x > W + 40) b.dead = true;
+    }
+    S.balls = S.balls.filter(b => !b.dead);
+  }
+
+  // ---- çizim ----
+  function drawShip(s) {
+    const T = s.T, w = T.w, h = T.h, k = Math.min(1, s.sink / 2.2);
+    g.save();
+    g.translate(s.x, SEA + Math.sin(s.bob) * 2.5 + k * (h + w * .5) * 1.1);
+    g.rotate(Math.sin(s.bob * .7) * .03 + k * .55);
+    g.globalAlpha = 1 - Math.max(0, k - .6) / .4;
+    const mast = w * .42;
+    g.strokeStyle = '#3a2a1f'; g.lineWidth = Math.max(2, w * .03);
+    const masts = T.name === 'savas' ? [-w * .24, w * .04, w * .28] : T.name === 'kalyon' ? [-w * .14, w * .18] : [0];
+    for (const mx of masts) {
+      g.beginPath(); g.moveTo(mx, -h); g.lineTo(mx, -h - mast); g.stroke();
+      g.fillStyle = s.hit ? '#fff' : T.sail;
+      g.beginPath(); g.moveTo(mx - 2, -h - mast + 4); g.quadraticCurveTo(mx - w * .2, -h - mast * .55, mx - 2, -h - 6); g.closePath(); g.fill();
+      g.fillStyle = '#c0392b'; g.beginPath(); g.moveTo(mx, -h - mast); g.lineTo(mx + 12, -h - mast + 4); g.lineTo(mx, -h - mast + 8); g.fill();
+    }
+    g.fillStyle = s.hit ? '#fff' : T.hull;
+    g.beginPath(); g.moveTo(-w / 2 - 8, -h); g.lineTo(w / 2, -h); g.lineTo(w / 2 - w * .12, 4); g.lineTo(-w / 2 + w * .1, 4); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.16)'; g.fillRect(-w / 2, -h, w, 3);
+    if (T.name === 'savas') { g.fillStyle = '#16100e'; for (let i = -2; i <= 2; i++) g.fillRect(i * w * .14 - 3, -h * .55, 6, 6); }
+    g.restore();
+  }
+
+  function draw() {
+    g.save();
+    if (S.shake > 0) g.translate(rnd(-1, 1) * S.shake * 16, rnd(-1, 1) * S.shake * 16);
+    const sky = g.createLinearGradient(0, 0, 0, SEA); sky.addColorStop(0, '#3fa7e6'); sky.addColorStop(.7, '#aee1f5'); sky.addColorStop(1, '#ffe9b8');
+    g.fillStyle = sky; g.fillRect(-20, -20, W + 40, SEA + 20);
+    g.fillStyle = 'rgba(255,244,190,.9)'; g.beginPath(); g.arc(790, 96, 44, 0, 6.29); g.fill();
+    g.fillStyle = 'rgba(255,244,190,.25)'; g.beginPath(); g.arc(790, 96, 70, 0, 6.29); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.9)';
+    for (const c of clouds) { g.beginPath(); g.ellipse(c.x, c.y, 54 * c.s, 15 * c.s, 0, 0, 6.29); g.ellipse(c.x - 26 * c.s, c.y - 9 * c.s, 30 * c.s, 14 * c.s, 0, 0, 6.29); g.ellipse(c.x + 22 * c.s, c.y - 11 * c.s, 34 * c.s, 16 * c.s, 0, 0, 6.29); g.fill(); }
+    // uzak adalar
+    g.fillStyle = '#7fb5c9'; g.beginPath(); g.moveTo(520, SEA); g.quadraticCurveTo(600, SEA - 46, 700, SEA); g.fill();
+    g.beginPath(); g.moveTo(760, SEA); g.quadraticCurveTo(860, SEA - 62, 980, SEA); g.fill();
+
+    if (S.mode !== 'menu') for (const s of S.ships) drawShip(s);
+
+    const sea = g.createLinearGradient(0, SEA, 0, H); sea.addColorStop(0, '#1f86c4'); sea.addColorStop(1, '#0b3d6b');
+    g.fillStyle = sea; g.beginPath(); g.moveTo(-20, H + 20); g.lineTo(-20, SEA);
+    for (let x = -20; x <= W + 20; x += 16) g.lineTo(x, SEA + Math.sin(x * .03 + S.t * 1.8) * 3);
+    g.lineTo(W + 20, H + 20); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.22)'; g.lineWidth = 2;
+    for (let r = 0; r < 5; r++) { g.beginPath(); for (let x = -20; x <= W + 20; x += 14) { const y = SEA + 22 + r * 30 + Math.sin(x * .025 + S.t * (1.2 + r * .2) + r) * 4; g[x === -20 ? 'moveTo' : 'lineTo'](x, y); } g.stroke(); }
+    for (const s of S.splashes || []) { g.strokeStyle = 'rgba(255,255,255,' + (1 - s.t / .6) + ')'; g.beginPath(); g.ellipse(s.x, SEA + 3, 8 + s.t * 60, 2 + s.t * 8, 0, 0, 6.29); g.stroke(); }
+
+    // kıyı ve top
+    g.fillStyle = '#5c4a3a'; g.beginPath(); g.moveTo(-20, H + 20); g.lineTo(-20, CY + 26); g.lineTo(150, CY + 26); g.quadraticCurveTo(176, CY + 60, 168, SEA + 30); g.lineTo(190, H + 20); g.fill();
+    g.fillStyle = '#6fae4f'; g.beginPath(); g.moveTo(-20, CY + 14); g.lineTo(146, CY + 18); g.quadraticCurveTo(160, CY + 26, 150, CY + 34); g.lineTo(-20, CY + 34); g.fill();
+    const L = launch();
+    if (S.mode === 'play') {   // atış yolu
+      g.fillStyle = 'rgba(255,255,255,.75)';
+      for (let i = 1; i <= 9; i++) { const t = i * .075; g.beginPath(); g.arc(L.mx + L.vx * t, L.my + L.vy * t + GRAV * t * t / 2, 3.2 - i * .2, 0, 6.29); g.fill(); }
+    }
+    g.save(); g.translate(CX, CY); g.rotate(L.ang); g.translate(-(S.recoil || 0) * 9, 0);
+    const brl = g.createLinearGradient(0, -12, 0, 12); brl.addColorStop(0, '#5a5f66'); brl.addColorStop(.5, '#2b2e33'); brl.addColorStop(1, '#17191c');
+    g.fillStyle = brl; g.beginPath(); g.moveTo(-18, -13); g.lineTo(54, -9); g.lineTo(58, -11); g.lineTo(62, -11); g.lineTo(62, 11); g.lineTo(58, 11); g.lineTo(54, 9); g.lineTo(-18, 13); g.closePath(); g.fill();
+    g.restore();
+    g.fillStyle = '#7a4a22'; g.beginPath(); g.arc(CX, CY + 10, 18, 0, 6.29); g.fill();
+    g.strokeStyle = '#3d240f'; g.lineWidth = 4; g.stroke();
+    g.beginPath(); for (let i = 0; i < 4; i++) { g.moveTo(CX, CY + 10); g.lineTo(CX + Math.cos(i * 1.571) * 17, CY + 10 + Math.sin(i * 1.571) * 17); } g.lineWidth = 2; g.stroke();
+
+    if (S.mode !== 'menu') {
+      g.fillStyle = '#16181b'; for (const b of S.balls) { g.beginPath(); g.arc(b.x, b.y, 6, 0, 6.29); g.fill(); }
+      for (const f of S.fx) { g.fillStyle = 'rgba(' + f.col + ',' + (1 - f.t / f.life) + ')'; g.beginPath(); g.arc(f.x, f.y, f.s, 0, 6.29); g.fill(); }
+    }
+    g.restore();
+
+    g.textBaseline = 'top';
+    if (S.mode !== 'menu') {
+      g.textAlign = 'left'; g.fillStyle = '#fff'; g.font = '700 26px system-ui, sans-serif'; g.shadowColor = 'rgba(0,0,0,.35)'; g.shadowBlur = 6;
+      g.fillText('Skor: ' + S.score, 20, 16); g.font = '600 18px system-ui, sans-serif'; g.fillText('Batırılan: ' + S.sunk, 20, 50);
+      g.textAlign = 'right'; g.font = '26px system-ui, sans-serif'; g.fillText('❤'.repeat(Math.max(0, S.lives)), W - 20, 16); g.shadowBlur = 0;
+      // dolum çubuğu
+      g.fillStyle = 'rgba(0,0,0,.3)'; g.fillRect(CX - 30, CY + 44, 60, 6); g.fillStyle = S.reload > 0 ? '#ffb347' : '#7dff8a'; g.fillRect(CX - 30, CY + 44, 60 * (1 - S.reload / .55), 6);
+    }
+    g.textAlign = 'center';
+    if (S.mode === 'menu') {
+      g.fillStyle = 'rgba(6,24,44,.55)'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#fff'; g.font = '800 68px system-ui, sans-serif'; g.fillText('GEMİ DÜŞÜRME', W / 2, 130);
+      g.font = '500 22px system-ui, sans-serif'; g.fillStyle = '#d6efff';
+      g.fillText('Gemiler kıyıya varmadan topla batır.', W / 2, 240);
+      g.fillText('Fareyle ya da parmağınla nişan al, tıklayınca top ateşlenir.', W / 2, 274);
+      g.fillText('Uzağa nişan alırsan top daha güçlü çıkar. Üç gemi kıyıya varırsa oyun biter.', W / 2, 308);
+      g.fillStyle = '#fff'; g.font = '700 28px system-ui, sans-serif';
+      if (Math.floor(performance.now() / 500) % 2) g.fillText('Başlamak için tıkla', W / 2, 390);
+      if (best) { g.font = '600 20px system-ui, sans-serif'; g.fillStyle = '#ffe9a8'; g.fillText('En iyi skor: ' + best, W / 2, 446); }
+    }
+    if (S.mode === 'over') {
+      g.fillStyle = 'rgba(6,24,44,.6)'; g.fillRect(0, 0, W, H);
+      g.fillStyle = '#ff7a66'; g.font = '800 64px system-ui, sans-serif'; g.fillText('OYUN BİTTİ', W / 2, 150);
+      g.fillStyle = '#fff'; g.font = '700 32px system-ui, sans-serif'; g.fillText('Skor: ' + S.score + '   Batırılan gemi: ' + S.sunk, W / 2, 250);
+      g.fillStyle = '#ffe9a8'; g.font = '600 22px system-ui, sans-serif'; g.fillText('En iyi skor: ' + best, W / 2, 300);
+      if (S.overT > .8) { g.fillStyle = '#fff'; g.font = '700 26px system-ui, sans-serif'; g.fillText('Yeniden başlamak için tıkla', W / 2, 370); }
+    }
+  }
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(.05, (now - last) / 1000); last = now;
+    update(dt); draw(); requestAnimationFrame(frame);
+  }
+  window.__step = (n, dt) => { for (let i = 0; i < n; i++) update(dt || 1 / 60); draw(); };
+  window.__fire = fire; window.__launch = launch;
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
